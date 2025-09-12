@@ -1,13 +1,23 @@
-# desktop_app/main.py
+import os
 import tkinter as tk
 from tkinter import filedialog, messagebox
 from pdfanonymizer.core import PdfAnonymizer
 
-# Hardcoded words to redact
-REDACT_WORDS = ["assicurazione","John Doe", "Secret Company", "123 Main St"]
+from .config_sample import REDACT_WORDS as sample_words  # lowercase
+try:
+    from .config_local import REDACT_WORDS as local_words
+except ImportError:
+    local_words = []
+
+# Merge them: local overrides take precedence
+redact_words = local_words or sample_words
 
 def select_file():
-    file_path = filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
+    desktop = os.path.join(os.path.expanduser("~"), "Desktop")
+    file_path = filedialog.askopenfilename(
+        initialdir=desktop,
+        filetypes=[("PDF Files", "*.pdf")]
+    )
     entry_file.delete(0, tk.END)
     entry_file.insert(0, file_path)
 
@@ -21,9 +31,9 @@ def anonymize_pdf():
     if not output_file:
         return
 
-    anonymizer = PdfAnonymizer(terms_to_anonymize=REDACT_WORDS)
+    anonymizer = PdfAnonymizer(terms_to_anonymize=redact_words)
     anonymizer.anonymize_pdf(input_file, output_file)
-    messagebox.showinfo("Done", "Anonymized PDF saved to {}".format(output_file))
+    messagebox.showinfo("Done", f"Anonymized PDF saved to {output_file}")
 
 root = tk.Tk()
 root.title("PDF Anonymizer")
