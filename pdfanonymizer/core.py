@@ -5,7 +5,7 @@ from typing import IO, Callable, Dict, List, Union
 import pdfplumber
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase.pdfmetrics import stringWidth
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter
 from reportlab.pdfgen.canvas import Canvas
 import re
 
@@ -96,15 +96,10 @@ class PdfAnonymizer:
                 can = canvas.Canvas(packet, pagesize=(width, height))
 
                 # Anonymize words
-                for word_info in page.extract_words() or []:
+                for word_info in page.extract_words(x_tolerance=1.0, keep_blank_chars=True, use_text_flow=True) or []:
                     self.draw_anonymized_word(
                         can, word_info, height, self.anonymize_text
                     )
-                    # x0 = float(word_info["x0"])
-                    # y0 = float(word_info["bottom"])
-                    # text = word_info.get("text", "")
-                    # anonymized_text = self.anonymize_text(text)
-                    # can.drawString(x0, height - y0, anonymized_text)
 
                 can.save()
                 packet.seek(0)
