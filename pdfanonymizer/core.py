@@ -1,7 +1,7 @@
 import io
 from io import BufferedReader, BytesIO
 from pathlib import Path
-from typing import IO, Callable, Dict, List, Union
+from typing import IO, Dict, List, Union, Callable, TypedDict, Match
 import pdfplumber
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase.pdfmetrics import stringWidth
@@ -11,24 +11,66 @@ import re
 
 MIN_FONT_SIZE: float = 2.0  # minimum font size
 
-# Inputs accepted by pdfplumber.open
 PdfInput = Union[str, Path, BytesIO, BufferedReader]
 PdfOutput = IO[bytes]  # BytesIO already implements IO[bytes]
 
 
+class PdfAnonymizerConfig(TypedDict):
+    terms_to_anonymize: List[str]
+    replacement: str
+    anonymize_alphanumeric: bool
+    anonymize_letters_special: bool
+
+
 class PdfAnonymizer:
-    def __init__(
-        self, terms_to_anonymize: List[str], replacement: str = "[REDACTED]"
-    ) -> None:
-        self.terms_to_anonymize = terms_to_anonymize
-        self.replacement = replacement
+    def __init__(self, config: PdfAnonymizerConfig) -> None:
+        self.config: PdfAnonymizerConfig = {
+            "terms_to_anonymize": config.get("terms_to_anonymize", []),
+            "replacement": config.get("replacement", "[REDACTED]"),
+            "anonymize_alphanumeric": config.get("anonymize_alphanumeric", True),
+            "anonymize_letters_special": config.get("anonymize_letters_special", True),
+        }
+
+    def should_anonymize(self, word: str) -> bool:
+        if len(word) < 6:
+            return False
+
+        has_alpha: bool = any(c.isalpha() for c in word)
+        has_digit: bool = any(c.isdigit() for c in word)
+        has_special: bool = any(not c.isalnum() for c in word)
+
+        if self.config["anonymize_alphanumeric"] and has_alpha and has_digit:
+            return True
+        if self.config["anonymize_letters_special"] and has_alpha and has_special:
+            return True
+        return False
 
     def anonymize_text(self, text: str) -> str:
-        """Replace all terms in the text with the replacement string, case-insensitive, whole words only."""
-        for term in self.terms_to_anonymize:
-            pattern = r"\b" + re.escape(term) + r"\b"
-            text = re.sub(pattern, self.replacement, text, flags=re.IGNORECASE)
-        return text
+        """Replace all terms and apply heuristics, preserving punctuation."""
+
+        # Explicit replacement from config
+        replacement: str = self.config.get("replacement", "[REDACTED]")
+
+        # Replace explicit terms with regex \b boundaries
+        for term in self.config.get("terms_to_anonymize", []):
+            pattern: str = r"\b" + re.escape(term) + r"\b"
+            text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+
+        # Heuristic replacement: match word + optional trailing punctuation
+        def repl(m: Match[str]) -> str:
+            # Capture groups: word + trailing punctuation
+            word: str = m.group(1)  # type: ignore
+            punct: str = m.group(2)  # type: ignore
+            if self.should_anonymize(word):
+                return replacement + punct
+            return word + punct
+
+        # Match: (\w[\w\d]*?) = word part, (\W*) = trailing punctuation
+        pattern: str = r'([\w\d]+)(\W*)'
+        return re.sub(pattern, repl, text)
+
+
+
 
     def draw_anonymized_word(
         self,
@@ -38,18 +80,6 @@ class PdfAnonymizer:
         anonymize_func: Callable[[str], str],
         font_name: str = "Helvetica",
     ) -> None:
-        """
-        Draw an anonymized version of a word on a ReportLab canvas,
-        centered inside its original bounding box.
-
-        Parameters:
-            can: ReportLab canvas
-            word_info: dictionary from page.extract_words(), must include
-                    keys: "x0", "bottom", "width", "height", "text"
-            page_height: total height of the PDF page
-            anonymize_func: function to anonymize the text
-            font_name: font to use for drawing
-        """
         x0: float = float(word_info["x0"])
         y0: float = float(word_info["bottom"])
         word_width: float = float(word_info["width"])
@@ -66,12 +96,9 @@ class PdfAnonymizer:
             font_size *= min(1.0, word_width / text_width)
         font_size = max(MIN_FONT_SIZE, font_size)
 
-        # Recompute text width with final font size
         text_width = stringWidth(anonymized_text, font_name, font_size)
         text_x: float = x0 + (word_width - text_width) / 2
-        text_y: float = (
-            page_height - y0 - (word_height + font_size) / 2
-        )  # vertical centering
+        text_y: float = page_height - y0 - (word_height + font_size) / 2
 
         can.saveState()
         can.setFont(font_name, font_size)
@@ -81,41 +108,35 @@ class PdfAnonymizer:
     def anonymize_pdf_streams(
         self, input_stream: PdfInput, output_stream: PdfOutput
     ) -> None:
-        """
-        Core PDF anonymization that works on binary streams.
-        """
         writer: PdfWriter = PdfWriter()
 
-        # pdfplumber.open already supports str | Path | BytesIO | BufferedReader
-        pdf_file: PdfInput = input_stream
-
-        with pdfplumber.open(pdf_file) as pdf:
+        with pdfplumber.open(input_stream) as pdf:
             for page in pdf.pages:
-                width, height = page.width, page.height
-                packet = io.BytesIO()
-                can = canvas.Canvas(packet, pagesize=(width, height))
+                width: float = page.width
+                height: float = page.height
+                packet: BytesIO = io.BytesIO()
+                can: Canvas = canvas.Canvas(packet, pagesize=(width, height))
 
-                # Anonymize words
-                for word_info in page.extract_words(x_tolerance=1.0, keep_blank_chars=True, use_text_flow=True) or []:
+                for word_info in (
+                    page.extract_words(
+                        x_tolerance=1.0, keep_blank_chars=True, use_text_flow=True
+                    )
+                    or []
+                ):
                     self.draw_anonymized_word(
                         can, word_info, height, self.anonymize_text
                     )
 
                 can.save()
                 packet.seek(0)
-
-                new_pdf = PdfReader(packet)
+                new_pdf: PdfReader = PdfReader(packet)
                 writer.add_page(new_pdf.pages[0])
 
-        # Explicitly annotate return type as None for clarity
         writer.write(output_stream)  # type: ignore
 
     def anonymize_pdf(
         self, input_path: Union[str, Path], output_path: Union[str, Path]
     ) -> None:
-        """
-        File-based PDF anonymization. Opens files as streams and calls `anonymize_pdf_streams`.
-        """
         input_path = Path(input_path)
         output_path = Path(output_path)
 

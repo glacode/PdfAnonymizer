@@ -1,7 +1,7 @@
 import io
 import tempfile
 from pathlib import Path
-from pdfanonymizer.core import PdfAnonymizer
+from pdfanonymizer.core import PdfAnonymizer, PdfAnonymizerConfig
 
 def create_sample_pdf() -> bytes:
     """Return bytes of a minimal PDF with some text."""
@@ -13,12 +13,22 @@ def create_sample_pdf() -> bytes:
     packet.seek(0)
     return packet.read()
 
+def make_config(terms: list[str]) -> PdfAnonymizerConfig:
+    """Helper to create a TypedDict config with all keys set."""
+    return {
+        "terms_to_anonymize": terms,
+        "replacement": "[REDACTED]",
+        "anonymize_alphanumeric": True,
+        "anonymize_letters_special": True,
+    }
+
 def test_anonymize_pdf_streams():
     pdf_bytes = create_sample_pdf()
     pdf_in = io.BytesIO(pdf_bytes)
     pdf_out = io.BytesIO()
 
-    anonymizer = PdfAnonymizer(terms_to_anonymize=["secret"])
+    # Instantiate PdfAnonymizer with TypedDict config
+    anonymizer = PdfAnonymizer(make_config(["secret"]))
     anonymizer.anonymize_pdf_streams(pdf_in, pdf_out)
 
     # Check output is not empty
@@ -39,19 +49,33 @@ def test_anonymize_pdf_with_temp_files():
         tmp_in.write(pdf_bytes)
         tmp_in.flush()
 
-        anonymizer = PdfAnonymizer(terms_to_anonymize=["secret"])
+        # Instantiate PdfAnonymizer with TypedDict config
+        anonymizer = PdfAnonymizer(make_config(["secret"]))
         anonymizer.anonymize_pdf(input_path, output_path)
 
         # Check output file exists and is not empty
         assert output_path.exists()
         assert output_path.stat().st_size > 0
 
+def test_first_and_final_terms_are_anonymized():
+    # Arrange
+    terms_to_anonymize = ["Hello", "Doe"]
+    text = "Hello John Doe"
+    anonymizer = PdfAnonymizer(make_config(terms_to_anonymize))
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    expected = "[REDACTED] John [REDACTED]"
+    assert result == expected
+
+
 # tests/test_breaking.py
 def test_word_boundaries_lost():
     # Arrange
     terms_to_anonymize = ["John", "Doe"]
     text = "Hello John Doe!"
-    anonymizer = PdfAnonymizer(terms_to_anonymize=terms_to_anonymize)
+    anonymizer = PdfAnonymizer(make_config(terms_to_anonymize))
 
     # Act
     result = anonymizer.anonymize_text(text)
@@ -67,11 +91,12 @@ def test_anonimize_full_word_only():
     # Arrange
     terms_to_anonymize = ["fix"]
     text = "fix and suffix"
-    anonymizer = PdfAnonymizer(terms_to_anonymize=terms_to_anonymize)
+    anonymizer = PdfAnonymizer(make_config(terms_to_anonymize))
 
     # Act
     result = anonymizer.anonymize_text(text)
 
+    # Assert
     expected = "[REDACTED] and suffix"
     assert result == expected
 
@@ -80,10 +105,11 @@ def test_anonimize_is_not_case_sensitive():
     # Arrange
     terms_to_anonymize = ["fix"]
     text = "fix and Fix"
-    anonymizer = PdfAnonymizer(terms_to_anonymize=terms_to_anonymize)
+    anonymizer = PdfAnonymizer(make_config(terms_to_anonymize))
 
     # Act
     result = anonymizer.anonymize_text(text)
 
+    # Assert
     expected = "[REDACTED] and [REDACTED]"
     assert result == expected
