@@ -61,3 +61,29 @@ def test_word_boundaries_lost():
     # Correct behavior should preserve spaces: "Hello [REDACTED] [REDACTED]!"
     expected = "Hello [REDACTED] [REDACTED]!"
     assert result == expected
+
+# anonymize full word only
+def test_anonimize_full_word_only():
+    # Arrange
+    terms_to_anonymize = ["fix"]
+    text = "fix and suffix"
+    anonymizer = PdfAnonymizer(terms_to_anonymize=terms_to_anonymize)
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    expected = "[REDACTED] and suffix"
+    assert result == expected
+
+# anonymize is not case sensitive
+def test_anonimize_is_not_case_sensitive():
+    # Arrange
+    terms_to_anonymize = ["fix"]
+    text = "fix and Fix"
+    anonymizer = PdfAnonymizer(terms_to_anonymize=terms_to_anonymize)
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    expected = "[REDACTED] and [REDACTED]"
+    assert result == expected

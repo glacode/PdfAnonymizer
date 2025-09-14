@@ -6,6 +6,8 @@ import pdfplumber
 from reportlab.pdfgen import canvas
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from PyPDF2 import PdfReader, PdfWriter
+from reportlab.pdfgen.canvas import Canvas
+import re
 
 MIN_FONT_SIZE: float = 2.0  # minimum font size
 
@@ -15,17 +17,18 @@ PdfOutput = IO[bytes]  # BytesIO already implements IO[bytes]
 
 
 class PdfAnonymizer:
-    def __init__(self, terms_to_anonymize: List[str], replacement: str = "[REDACTED]") -> None:
+    def __init__(
+        self, terms_to_anonymize: List[str], replacement: str = "[REDACTED]"
+    ) -> None:
         self.terms_to_anonymize = terms_to_anonymize
         self.replacement = replacement
 
     def anonymize_text(self, text: str) -> str:
-        """Replace all terms in the text with the replacement string."""
+        """Replace all terms in the text with the replacement string, case-insensitive, whole words only."""
         for term in self.terms_to_anonymize:
-            text = text.replace(term, self.replacement)
+            pattern = r"\b" + re.escape(term) + r"\b"
+            text = re.sub(pattern, self.replacement, text, flags=re.IGNORECASE)
         return text
-    
-    from reportlab.pdfgen.canvas import Canvas
 
     def draw_anonymized_word(
         self,
@@ -33,7 +36,7 @@ class PdfAnonymizer:
         word_info: Dict[str, float],
         page_height: float,
         anonymize_func: Callable[[str], str],
-        font_name: str = "Helvetica"
+        font_name: str = "Helvetica",
     ) -> None:
         """
         Draw an anonymized version of a word on a ReportLab canvas,
@@ -66,7 +69,9 @@ class PdfAnonymizer:
         # Recompute text width with final font size
         text_width = stringWidth(anonymized_text, font_name, font_size)
         text_x: float = x0 + (word_width - text_width) / 2
-        text_y: float = page_height - y0 - (word_height + font_size) / 2  # vertical centering
+        text_y: float = (
+            page_height - y0 - (word_height + font_size) / 2
+        )  # vertical centering
 
         can.saveState()
         can.setFont(font_name, font_size)
@@ -74,9 +79,7 @@ class PdfAnonymizer:
         can.restoreState()
 
     def anonymize_pdf_streams(
-        self,
-        input_stream: PdfInput,
-        output_stream: PdfOutput
+        self, input_stream: PdfInput, output_stream: PdfOutput
     ) -> None:
         """
         Core PDF anonymization that works on binary streams.
@@ -94,7 +97,9 @@ class PdfAnonymizer:
 
                 # Anonymize words
                 for word_info in page.extract_words() or []:
-                    self.draw_anonymized_word(can, word_info, height, self.anonymize_text)
+                    self.draw_anonymized_word(
+                        can, word_info, height, self.anonymize_text
+                    )
                     # x0 = float(word_info["x0"])
                     # y0 = float(word_info["bottom"])
                     # text = word_info.get("text", "")
@@ -111,9 +116,7 @@ class PdfAnonymizer:
         writer.write(output_stream)  # type: ignore
 
     def anonymize_pdf(
-        self,
-        input_path: Union[str, Path],
-        output_path: Union[str, Path]
+        self, input_path: Union[str, Path], output_path: Union[str, Path]
     ) -> None:
         """
         File-based PDF anonymization. Opens files as streams and calls `anonymize_pdf_streams`.
