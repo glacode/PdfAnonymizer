@@ -20,6 +20,7 @@ def make_config(terms: list[str]) -> PdfAnonymizerConfig:
         "replacement": "[REDACTED]",
         "anonymize_alphanumeric": True,
         "anonymize_letters_special": True,
+        "anonymize_numeric_codes": True,
     }
 
 def test_anonymize_pdf_streams():
@@ -229,4 +230,20 @@ def test_anonymize_letters_special():
 
     # Assert
     expected = "My password is [REDACTED] and [REDACTED]"
+    assert result == expected
+
+# test anonymize_numeric_codes
+def test_anonymize_numeric_codes():
+    # Arrange
+    terms_to_anonymize: list[str]  = []
+    text = "My codes are 123456 and 9876543210. This is a number 1.100,55"
+    config = make_config(terms_to_anonymize)
+    config["anonymize_numeric_codes"] = True
+    anonymizer = PdfAnonymizer(config)
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    # Assert
+    expected = "My codes are [REDACTED] and [REDACTED] This is a number 1.100,55"
     assert result == expected

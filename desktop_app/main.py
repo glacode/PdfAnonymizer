@@ -25,6 +25,7 @@ config: PdfAnonymizerConfig = {
     "replacement": "[REDACTED]",
     "anonymize_alphanumeric": heuristic_rules.get("alphanumeric_words", True),
     "anonymize_letters_special": heuristic_rules.get("letters_special_chars", True),
+    "anonymize_numeric_codes": heuristic_rules.get("numeric_codes", True),
 }
 
 # --- GUI callbacks ---

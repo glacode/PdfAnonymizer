@@ -20,6 +20,7 @@ class PdfAnonymizerConfig(TypedDict):
     replacement: str
     anonymize_alphanumeric: bool
     anonymize_letters_special: bool
+    anonymize_numeric_codes: bool
 
 
 class PdfAnonymizer:
@@ -29,6 +30,7 @@ class PdfAnonymizer:
             "replacement": config.get("replacement", "[REDACTED]"),
             "anonymize_alphanumeric": config.get("anonymize_alphanumeric", True),
             "anonymize_letters_special": config.get("anonymize_letters_special", True),
+            "anonymize_numeric_codes": config.get("anonymize_numeric_codes", False),
         }
 
     def should_anonymize(self, word: str, replacement: str) -> bool:
@@ -45,6 +47,8 @@ class PdfAnonymizer:
         if self.config["anonymize_alphanumeric"] and has_alpha and has_digit:
             return True
         if self.config["anonymize_letters_special"] and has_alpha and has_special:
+            return True
+        if self.config["anonymize_numeric_codes"] and middle.isdigit() and len(word) > 5:
             return True
         return False
 
