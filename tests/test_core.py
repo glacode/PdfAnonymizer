@@ -113,3 +113,120 @@ def test_anonimize_is_not_case_sensitive():
     # Assert
     expected = "[REDACTED] and [REDACTED]"
     assert result == expected
+
+# anonymize does not break words with punctuation
+def test_anonimize_does_not_break_words_with_punctuation():
+    # Arrange
+    terms_to_anonymize = ["fix"]
+    text = "fix, and ,fix and fix."
+    anonymizer = PdfAnonymizer(make_config(terms_to_anonymize))
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    # Assert
+    expected = "[REDACTED], and ,[REDACTED] and [REDACTED]."
+    assert result == expected
+
+# anonymize does not break words with new lines
+def test_anonimize_does_not_break_words_with_new_lines():
+    # Arrange
+    terms_to_anonymize = ["fix"]
+    text = """\
+fix
+and
+fix"""
+    anonymizer = PdfAnonymizer(make_config(terms_to_anonymize))
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    # Assert
+    expected = "[REDACTED]\nand\n[REDACTED]"
+    assert result == expected
+
+# anonymize does not break words with tabs
+def test_anonimize_does_not_break_words_with_tabs():
+    # Arrange
+    terms_to_anonymize = ["fix"]
+    text = "fix\tand\tfix"
+    anonymizer = PdfAnonymizer(make_config(terms_to_anonymize))
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    # Assert
+    expected = "[REDACTED]\tand\t[REDACTED]"
+    assert result == expected
+
+# anonymize does not break words with multiple spaces
+def test_anonimize_does_not_break_words_with_multiple_spaces():
+    # Arrange
+    terms_to_anonymize = ["fix"]
+    text = "fix  and   fix"
+    anonymizer = PdfAnonymizer(make_config(terms_to_anonymize))
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    # Assert
+    expected = "[REDACTED]  and   [REDACTED]"
+    assert result == expected
+
+# anonymize does not break words with hyphens
+def test_anonimize_does_not_break_words_with_hyphens():
+    # Arrange
+    terms_to_anonymize = ["fix"]
+    text = "fix-and-fix"
+    anonymizer = PdfAnonymizer(make_config(terms_to_anonymize))
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    # Assert
+    expected = "[REDACTED]-and-[REDACTED]"
+    assert result == expected
+
+def test_no_anonimization_if_special_character_only_at_start_or_end():
+    # Arrange
+    terms_to_anonymize = ["none"]
+    text = "-JohnLongLong ,middleLongLong, DoeLongLong."
+    anonymizer = PdfAnonymizer(make_config(terms_to_anonymize))
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    # Assert
+    assert result == "-JohnLongLong ,middleLongLong, DoeLongLong."
+
+# test anonymize_alphanumeric
+def test_anonymize_alphanumeric():
+    # Arrange
+    terms_to_anonymize: list[str]  = []
+    text = "My code is abc123 and xy6z890."
+    config = make_config(terms_to_anonymize)
+    config["anonymize_alphanumeric"] = True
+    anonymizer = PdfAnonymizer(config)
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    # Assert
+    expected = "My code is [REDACTED] and [REDACTED]"
+    assert result == expected
+
+# test anonymize_letters_special
+def test_anonymize_letters_special():
+    # Arrange
+    terms_to_anonymize: list[str]  = []
+    text = "My password is pass@word! and hello#world."
+    config = make_config(terms_to_anonymize)
+    config["anonymize_letters_special"] = True
+    anonymizer = PdfAnonymizer(config)
+
+    # Act
+    result = anonymizer.anonymize_text(text)
+
+    # Assert
+    expected = "My password is [REDACTED] and [REDACTED]"
+    assert result == expected

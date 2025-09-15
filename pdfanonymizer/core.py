@@ -31,13 +31,16 @@ class PdfAnonymizer:
             "anonymize_letters_special": config.get("anonymize_letters_special", True),
         }
 
-    def should_anonymize(self, word: str) -> bool:
-        if len(word) < 6:
+    def should_anonymize(self, word: str, replacement: str) -> bool:
+        if len(word) < 6 or replacement in word:
             return False
 
         has_alpha: bool = any(c.isalpha() for c in word)
         has_digit: bool = any(c.isdigit() for c in word)
-        has_special: bool = any(not c.isalnum() for c in word)
+
+        # special chars only if inside the word (not just at start/end)
+        middle = word[1:-1] if len(word) > 2 else ""
+        has_special: bool = any(not c.isalnum() for c in middle)
 
         if self.config["anonymize_alphanumeric"] and has_alpha and has_digit:
             return True
@@ -59,18 +62,15 @@ class PdfAnonymizer:
         # Heuristic replacement: match word + optional trailing punctuation
         def repl(m: Match[str]) -> str:
             # Capture groups: word + trailing punctuation
-            word: str = m.group(1)  # type: ignore
-            punct: str = m.group(2)  # type: ignore
-            if self.should_anonymize(word):
-                return replacement + punct
-            return word + punct
+            word: str = m.group(0)
+            # punct: str = m.group(2)
+            if self.should_anonymize(word, replacement):
+                return replacement
+            return word
 
         # Match: (\w[\w\d]*?) = word part, (\W*) = trailing punctuation
-        pattern: str = r'([\w\d]+)(\W*)'
+        pattern = r"[A-Za-z0-9][A-Za-z0-9@#.!]*"
         return re.sub(pattern, repl, text)
-
-
-
 
     def draw_anonymized_word(
         self,
