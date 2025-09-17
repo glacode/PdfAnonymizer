@@ -8,7 +8,10 @@ from .config_sample import REDACT_WORDS as sample_words, HEURISTIC_RULES as samp
 
 # --- Load local overrides if present ---
 try:
-    from .config_local import REDACT_WORDS as local_words, HEURISTIC_RULES as local_rules
+    from .config_local import (
+        REDACT_WORDS as local_words,
+        HEURISTIC_RULES as local_rules,
+    )
 except ImportError:
     local_words = None
     local_rules = {}
@@ -28,25 +31,30 @@ config: PdfAnonymizerConfig = {
     "anonymize_numeric_codes": heuristic_rules.get("numeric_codes", True),
 }
 
+
 # --- GUI callbacks ---
 def select_file():
     desktop = os.path.join(os.path.expanduser("~"), "Desktop")
     file_path = filedialog.askopenfilename(
-        initialdir=desktop,
-        filetypes=[("PDF Files", "*.pdf")]
+        initialdir=desktop, filetypes=[("PDF Files", "*.pdf")]
     )
     entry_file.delete(0, tk.END)
     entry_file.insert(0, file_path)
+
 
 def anonymize_pdf():
     input_file = entry_file.get()
     if not input_file:
         messagebox.showwarning("Missing file", "Please select a PDF file.")
         return
-
+    # Create default output filename from input filename
+    input_basename = os.path.splitext(os.path.basename(input_file))[0]
+    default_output = f"{input_basename}_anonymized.pdf"
     output_file = filedialog.asksaveasfilename(
+        initialdir=os.path.dirname(input_file) or os.getcwd(),
+        initialfile=default_output,
         defaultextension=".pdf",
-        filetypes=[("PDF Files", "*.pdf")]
+        filetypes=[("PDF Files", "*.pdf")],
     )
     if not output_file:
         return
@@ -54,6 +62,7 @@ def anonymize_pdf():
     anonymizer = PdfAnonymizer(config)
     anonymizer.anonymize_pdf(input_file, output_file)
     messagebox.showinfo("Done", f"Anonymized PDF saved to {output_file}")
+
 
 # --- GUI layout ---
 root = tk.Tk()
